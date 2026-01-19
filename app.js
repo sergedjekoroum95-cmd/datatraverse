@@ -1,14 +1,15 @@
 /****************************************************
- * CONFIG — REMPLACE ICI
+ * CONFIG — DEJA REMPLI AVEC TES INFOS
  ****************************************************/
-const SUPABASE_URL = "https://XXXX.supabase.co";
-const SUPABASE_ANON_KEY = "XXXX";
+const SUPABASE_URL = "https://evebklfmlsqppsfjffsa.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2ZWJrbGZtbHNxcHBzZmpmZnNhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4NDc0OTQsImV4cCI6MjA4NDQyMzQ5NH0.VKbt6Z0lcoCZnWfyYpsvtpAl7nLcJx_v43j1wx-heQ8";
 
-/****************************************************
- * INIT
- ****************************************************/
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/****************************************************
+ * DOM
+ ****************************************************/
 const tbody = document.getElementById("tbody");
 const form = document.getElementById("hospitalForm");
 const resetBtn = document.getElementById("resetBtn");
@@ -20,7 +21,7 @@ const saveBtn = document.getElementById("saveBtn");
 let cache = [];
 
 /****************************************************
- * UI helpers
+ * Helpers UI
  ****************************************************/
 function qs(id){ return document.getElementById(id); }
 
@@ -39,30 +40,14 @@ function setTeleconsultationValue(val){
   const el = document.querySelector(`input[name="teleconsultation"][value="${v}"]`);
   if(el) el.checked = true;
 }
-
 function resetForm(){
   form.reset();
   qs("id").value = "";
   setTeleconsultationValue("NO");
 }
 
-function formToPayload(){
-  return {
-    name: qs("name").value.trim(),
-    status: qs("status").value,
-    country: qs("country").value.trim(),
-    city: qs("city").value.trim(),
-    category: qs("category").value,
-    speciality: qs("speciality").value.trim() || null,
-    website: qs("website").value.trim() || null,
-    email: qs("email").value.trim() || null,
-    telephone: qs("telephone").value.trim() || null,
-    teleconsultation: getTeleconsultationValue()
-  };
-}
-
 /****************************************************
- * Security helpers (anti XSS basique)
+ * Security helpers
  ****************************************************/
 function escapeHtml(str){
   return String(str ?? "")
@@ -81,7 +66,6 @@ function rowHTML(h){
   const website = h.website
     ? `<a href="${escapeAttr(h.website)}" target="_blank" rel="noreferrer">Lien</a>`
     : "—";
-
   const email = h.email
     ? `<a href="mailto:${escapeAttr(h.email)}">${escapeHtml(h.email)}</a>`
     : "—";
@@ -105,11 +89,9 @@ function rowHTML(h){
     </tr>
   `;
 }
-
 function render(list){
   tbody.innerHTML = list.map(rowHTML).join("") || `<tr><td colspan="11">Aucune donnée.</td></tr>`;
 }
-
 function applySearch(){
   const q = (searchInput.value || "").toLowerCase().trim();
   if(!q) return render(cache);
@@ -118,7 +100,25 @@ function applySearch(){
 }
 
 /****************************************************
- * Data (Supabase)
+ * Form payload
+ ****************************************************/
+function formToPayload(){
+  return {
+    name: qs("name").value.trim(),
+    status: qs("status").value,
+    country: qs("country").value.trim(),
+    city: qs("city").value.trim(),
+    category: qs("category").value,
+    speciality: qs("speciality").value.trim() || null,
+    website: qs("website").value.trim() || null,
+    email: qs("email").value.trim() || null,
+    telephone: qs("telephone").value.trim() || null,
+    teleconsultation: getTeleconsultationValue()
+  };
+}
+
+/****************************************************
+ * Data
  ****************************************************/
 async function fetchHospitals(){
   setStatus("• Synchronisation…", "warn");
@@ -129,7 +129,7 @@ async function fetchHospitals(){
     .order("created_at", { ascending: false });
 
   if(error){
-    setStatus("• Erreur de connexion", "bad");
+    setStatus("• Bloqué (RLS/policies ?)", "bad");
     throw error;
   }
 
@@ -138,9 +138,6 @@ async function fetchHospitals(){
   setStatus("• Connecté", "ok");
 }
 
-/****************************************************
- * Actions (Create / Update / Delete)
- ****************************************************/
 async function createHospital(payload){
   const { error } = await supabase.from("hospitals").insert(payload);
   if(error) throw error;
@@ -161,6 +158,7 @@ async function deleteHospital(id){
  ****************************************************/
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+
   const id = qs("id").value.trim();
   const payload = formToPayload();
 
@@ -180,11 +178,11 @@ form.addEventListener("submit", async (e) => {
     }
 
     resetForm();
-    await fetchHospitals(); // ✅ recharge DB centrale → synchro multi-users
+    await fetchHospitals();
   } catch(err){
     console.error(err);
-    alert("Erreur enregistrement: " + (err.message || err));
-    setStatus("• Erreur (voir console)", "bad");
+    alert("Erreur enregistrement: " + (err.message || JSON.stringify(err)));
+    setStatus("• Erreur (console)", "bad");
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = "Enregistrer";
@@ -200,7 +198,7 @@ refreshBtn.addEventListener("click", async () => {
     await fetchHospitals();
   } catch(err){
     console.error(err);
-    alert("Erreur rafraîchissement: " + (err.message || err));
+    alert("Erreur rafraîchissement: " + (err.message || JSON.stringify(err)));
   } finally {
     refreshBtn.disabled = false;
     refreshBtn.textContent = "Rafraîchir";
@@ -245,30 +243,24 @@ tbody.addEventListener("click", async (e) => {
       await fetchHospitals();
     } catch(err){
       console.error(err);
-      alert("Erreur suppression: " + (err.message || err));
+      alert("Erreur suppression: " + (err.message || JSON.stringify(err)));
       setStatus("• Erreur suppression", "bad");
     }
   }
 });
 
 /****************************************************
- * LIVE SYNC (Realtime)
- * -> Quand n’importe qui modifie la table, tu recharges.
+ * LIVE SYNC
  ****************************************************/
 function startRealtime(){
-  // Note: nécessite Supabase Realtime activé
   supabase
     .channel("hospitals_changes")
     .on(
       "postgres_changes",
       { event: "*", schema: "public", table: "hospitals" },
-      () => {
-        // Recharge silencieuse
-        fetchHospitals().catch(()=>{});
-      }
+      () => fetchHospitals().catch(()=>{})
     )
     .subscribe((status) => {
-      // statuses possible: SUBSCRIBED, TIMED_OUT, CHANNEL_ERROR, CLOSED
       if(status === "SUBSCRIBED"){
         setStatus("• Connecté (live)", "ok");
       }
@@ -280,19 +272,11 @@ function startRealtime(){
  ****************************************************/
 (async function init(){
   setStatus("• Connexion…", "warn");
-
-  // Petit check basique des clés
-  if(!SUPABASE_URL.includes("https://") || SUPABASE_ANON_KEY.length < 20){
-    setStatus("• Clés Supabase manquantes", "bad");
-    tbody.innerHTML = `<tr><td colspan="11">Configure SUPABASE_URL et SUPABASE_ANON_KEY dans app.js</td></tr>`;
-    return;
-  }
-
   try{
     await fetchHospitals();
     startRealtime();
   } catch(err){
     console.error(err);
-    tbody.innerHTML = `<tr><td colspan="11">Impossible de charger la base. Vérifie Supabase + RLS/Policies.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11">Impossible de charger la base. Vérifie : table hospitals + RLS/policies.</td></tr>`;
   }
 })();
