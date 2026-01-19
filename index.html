@@ -3,21 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Hospitals DB</title>
+  <title>DataTraverse - Hospitals</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
+
 <body>
   <div class="container">
     <header class="header">
-      <h1>Base Établissements (Hôpitaux)</h1>
-      <p class="muted">Ajout, modification et synchronisation via API.</p>
+      <h1>DataTraverse — Base Établissements</h1>
+      <p class="muted">Synchronisation multi-utilisateurs via Supabase (DB en ligne).</p>
     </header>
 
     <!-- FORM -->
     <section class="card">
-      <h2>Ajouter / Modifier un établissement</h2>
+      <div class="card-head">
+        <h2>Ajouter / Modifier un établissement</h2>
+        <div class="status-pill" id="syncStatus">• Connexion…</div>
+      </div>
 
-      <form id="hospitalForm" class="form-grid">
+      <form id="hospitalForm" class="form-grid" autocomplete="off">
         <input type="hidden" id="id" name="id" />
 
         <div class="field">
@@ -72,7 +76,7 @@
 
         <div class="field">
           <label for="telephone">Telephone</label>
-          <input id="telephone" name="telephone" type="tel" placeholder="+374..." />
+          <input id="telephone" name="telephone" type="tel" placeholder="+250..." />
         </div>
 
         <div class="field">
@@ -90,7 +94,7 @@
         </div>
 
         <div class="actions">
-          <button type="submit" class="btn primary">Enregistrer</button>
+          <button type="submit" class="btn primary" id="saveBtn">Enregistrer</button>
           <button type="button" id="resetBtn" class="btn">Réinitialiser</button>
         </div>
       </form>
@@ -99,7 +103,8 @@
     <!-- TABLE -->
     <section class="card">
       <div class="table-head">
-        <h2>Liste</h2>
+        <h2>Liste des établissements</h2>
+
         <div class="table-tools">
           <input id="search" type="search" placeholder="Rechercher..." />
           <button type="button" class="btn" id="refreshBtn">Rafraîchir</button>
@@ -124,17 +129,21 @@
             </tr>
           </thead>
           <tbody id="tbody">
-            <!-- rows injected by JS -->
+            <tr><td colspan="11">Chargement…</td></tr>
           </tbody>
         </table>
       </div>
 
       <p class="muted footnote">
-        Les données sont chargées depuis l’API. Le bouton “Enregistrer” fait un POST/PUT, “Supprimer” fait un DELETE.
+        Astuce : la synchronisation “live” recharge automatiquement quand quelqu’un ajoute/modifie/supprime.
       </p>
     </section>
   </div>
 
+  <!-- Supabase JS (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- App -->
   <script src="./app.js"></script>
 </body>
 </html>
