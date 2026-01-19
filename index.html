@@ -11,10 +11,9 @@
   <div class="container">
     <header class="header">
       <h1>DataTraverse — Base Établissements</h1>
-      <p class="muted">Synchronisation multi-utilisateurs via Supabase (DB en ligne).</p>
+      <p class="muted">Synchronisation multi-utilisateurs via Supabase.</p>
     </header>
 
-    <!-- FORM -->
     <section class="card">
       <div class="card-head">
         <h2>Ajouter / Modifier un établissement</h2>
@@ -100,7 +99,6 @@
       </form>
     </section>
 
-    <!-- TABLE -->
     <section class="card">
       <div class="table-head">
         <h2>Liste des établissements</h2>
@@ -135,15 +133,12 @@
       </div>
 
       <p class="muted footnote">
-        Astuce : la synchronisation “live” recharge automatiquement quand quelqu’un ajoute/modifie/supprime.
+        La liste se met à jour automatiquement si un autre utilisateur ajoute/modifie/supprime.
       </p>
     </section>
   </div>
 
-  <!-- Supabase JS (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-  <!-- App -->
   <script src="./app.js"></script>
 </body>
 </html>
