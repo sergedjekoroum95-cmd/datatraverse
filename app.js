@@ -1,40 +1,39 @@
-const API_BASE_URL = "http://localhost:3000/api"; // <- change si besoin
-const USE_API = false; // ✅ Mets true si ton API marche (GET/POST/PUT/DELETE)
+/****************************************************
+ * CONFIG — REMPLACE ICI
+ ****************************************************/
+const SUPABASE_URL = "https://XXXX.supabase.co";
+const SUPABASE_ANON_KEY = "XXXX";
+
+/****************************************************
+ * INIT
+ ****************************************************/
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const tbody = document.getElementById("tbody");
 const form = document.getElementById("hospitalForm");
 const resetBtn = document.getElementById("resetBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 const searchInput = document.getElementById("search");
+const syncStatus = document.getElementById("syncStatus");
+const saveBtn = document.getElementById("saveBtn");
 
 let cache = [];
 
-/** =========================
- *  Local DB (localStorage)
- *  ========================= */
-const LS_KEY = "hospitals_db_v1";
-
-function loadLocalDB() {
-  const raw = localStorage.getItem(LS_KEY);
-  try { return raw ? JSON.parse(raw) : []; } catch { return []; }
-}
-function saveLocalDB(items) {
-  localStorage.setItem(LS_KEY, JSON.stringify(items));
-}
-function makeId() {
-  return "h_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
-/** =========================
- *  Helpers DOM
- *  ========================= */
+/****************************************************
+ * UI helpers
+ ****************************************************/
 function qs(id){ return document.getElementById(id); }
+
+function setStatus(text, variant){
+  syncStatus.textContent = text;
+  syncStatus.classList.remove("ok","warn","bad");
+  if(variant) syncStatus.classList.add(variant);
+}
 
 function getTeleconsultationValue(){
   const selected = document.querySelector('input[name="teleconsultation"]:checked');
   return selected ? selected.value : "NO";
 }
-
 function setTeleconsultationValue(val){
   const v = (val === "YES") ? "YES" : "NO";
   const el = document.querySelector(`input[name="teleconsultation"][value="${v}"]`);
@@ -54,20 +53,38 @@ function formToPayload(){
     country: qs("country").value.trim(),
     city: qs("city").value.trim(),
     category: qs("category").value,
-    speciality: qs("speciality").value.trim(),
-    website: qs("website").value.trim(),
-    email: qs("email").value.trim(),
-    telephone: qs("telephone").value.trim(),
+    speciality: qs("speciality").value.trim() || null,
+    website: qs("website").value.trim() || null,
+    email: qs("email").value.trim() || null,
+    telephone: qs("telephone").value.trim() || null,
     teleconsultation: getTeleconsultationValue()
   };
 }
 
-/** =========================
- *  Rendering
- *  ========================= */
+/****************************************************
+ * Security helpers (anti XSS basique)
+ ****************************************************/
+function escapeHtml(str){
+  return String(str ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+function escapeAttr(str){ return escapeHtml(str).replaceAll("`","&#096;"); }
+
+/****************************************************
+ * Rendering
+ ****************************************************/
 function rowHTML(h){
-  const website = h.website ? `<a href="${escapeAttr(h.website)}" target="_blank" rel="noreferrer">Lien</a>` : "—";
-  const email = h.email ? `<a href="mailto:${escapeAttr(h.email)}">${escapeHtml(h.email)}</a>` : "—";
+  const website = h.website
+    ? `<a href="${escapeAttr(h.website)}" target="_blank" rel="noreferrer">Lien</a>`
+    : "—";
+
+  const email = h.email
+    ? `<a href="mailto:${escapeAttr(h.email)}">${escapeHtml(h.email)}</a>`
+    : "—";
 
   return `
     <tr data-id="${escapeAttr(h.id)}">
@@ -90,9 +107,7 @@ function rowHTML(h){
 }
 
 function render(list){
-  tbody.innerHTML = list.map(rowHTML).join("") || `
-    <tr><td colspan="11">Aucune donnée.</td></tr>
-  `;
+  tbody.innerHTML = list.map(rowHTML).join("") || `<tr><td colspan="11">Aucune donnée.</td></tr>`;
 }
 
 function applySearch(){
@@ -102,109 +117,90 @@ function applySearch(){
   render(filtered);
 }
 
-/** =========================
- *  Data layer (API ou Local)
- *  ========================= */
+/****************************************************
+ * Data (Supabase)
+ ****************************************************/
 async function fetchHospitals(){
-  if(USE_API){
-    const res = await fetch(`${API_BASE_URL}/hospitals`);
-    if(!res.ok) throw new Error("Erreur chargement API");
-    const data = await res.json();
-    cache = Array.isArray(data) ? data : (data.items || []);
-  } else {
-    cache = loadLocalDB();
+  setStatus("• Synchronisation…", "warn");
+
+  const { data, error } = await supabase
+    .from("hospitals")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if(error){
+    setStatus("• Erreur de connexion", "bad");
+    throw error;
   }
+
+  cache = data || [];
   applySearch();
+  setStatus("• Connecté", "ok");
 }
 
+/****************************************************
+ * Actions (Create / Update / Delete)
+ ****************************************************/
 async function createHospital(payload){
-  if(USE_API){
-    const res = await fetch(`${API_BASE_URL}/hospitals`, {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error(await res.text().catch(()=> "Erreur POST"));
-    return await res.json().catch(()=> payload);
-  } else {
-    const item = { id: makeId(), ...payload };
-    const items = loadLocalDB();
-    items.unshift(item);
-    saveLocalDB(items);
-    return item;
-  }
+  const { error } = await supabase.from("hospitals").insert(payload);
+  if(error) throw error;
 }
 
 async function updateHospital(id, payload){
-  if(USE_API){
-    const res = await fetch(`${API_BASE_URL}/hospitals/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(payload)
-    });
-    if(!res.ok) throw new Error(await res.text().catch(()=> "Erreur PUT"));
-    return await res.json().catch(()=> ({ id, ...payload }));
-  } else {
-    const items = loadLocalDB();
-    const idx = items.findIndex(x => String(x.id) === String(id));
-    if(idx === -1) throw new Error("ID introuvable (local)");
-    items[idx] = { ...items[idx], ...payload };
-    saveLocalDB(items);
-    return items[idx];
-  }
+  const { error } = await supabase.from("hospitals").update(payload).eq("id", id);
+  if(error) throw error;
 }
 
 async function deleteHospital(id){
-  if(USE_API){
-    const res = await fetch(`${API_BASE_URL}/hospitals/${encodeURIComponent(id)}`, { method: "DELETE" });
-    if(!res.ok) throw new Error(await res.text().catch(()=> "Erreur DELETE"));
-    return true;
-  } else {
-    const items = loadLocalDB().filter(x => String(x.id) !== String(id));
-    saveLocalDB(items);
-    return true;
-  }
+  const { error } = await supabase.from("hospitals").delete().eq("id", id);
+  if(error) throw error;
 }
 
-/** =========================
- *  Events
- *  ========================= */
+/****************************************************
+ * Events
+ ****************************************************/
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
-
   const id = qs("id").value.trim();
   const payload = formToPayload();
 
-  // ✅ Ajout direct dans la liste après enregistrement
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Enregistrement…";
+
   try{
-    if(id){
-      const updated = await updateHospital(id, payload);
-      cache = cache.map(x => String(x.id) === String(id) ? updated : x);
-    } else {
-      const created = await createHospital(payload);
-      cache = [created, ...cache];
+    if(!payload.name || !payload.status || !payload.country || !payload.city || !payload.category){
+      alert("Veuillez remplir les champs obligatoires.");
+      return;
     }
 
-    saveLocalDB(cache); // utile même si USE_API=false (sinon ça écrase rien)
+    if(id){
+      await updateHospital(id, payload);
+    } else {
+      await createHospital(payload);
+    }
+
     resetForm();
-    applySearch();
+    await fetchHospitals(); // ✅ recharge DB centrale → synchro multi-users
   } catch(err){
     console.error(err);
-    alert("Erreur enregistrement: " + err.message);
+    alert("Erreur enregistrement: " + (err.message || err));
+    setStatus("• Erreur (voir console)", "bad");
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Enregistrer";
   }
 });
 
 resetBtn.addEventListener("click", resetForm);
 
-// ✅ RAFRAICHIR corrigé (bouton actif)
 refreshBtn.addEventListener("click", async () => {
   refreshBtn.disabled = true;
-  refreshBtn.textContent = "Chargement...";
+  refreshBtn.textContent = "Chargement…";
   try{
     await fetchHospitals();
   } catch(err){
     console.error(err);
-    alert("Erreur rafraîchissement: " + err.message);
+    alert("Erreur rafraîchissement: " + (err.message || err));
   } finally {
     refreshBtn.disabled = false;
     refreshBtn.textContent = "Rafraîchir";
@@ -246,33 +242,57 @@ tbody.addEventListener("click", async (e) => {
 
     try{
       await deleteHospital(id);
-      cache = cache.filter(x => String(x.id) !== String(id));
-      saveLocalDB(cache);
-      applySearch();
+      await fetchHospitals();
     } catch(err){
       console.error(err);
-      alert("Erreur suppression: " + err.message);
+      alert("Erreur suppression: " + (err.message || err));
+      setStatus("• Erreur suppression", "bad");
     }
   }
 });
 
-/** =========================
- *  Security helpers
- *  ========================= */
-function escapeHtml(str){
-  return String(str ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
+/****************************************************
+ * LIVE SYNC (Realtime)
+ * -> Quand n’importe qui modifie la table, tu recharges.
+ ****************************************************/
+function startRealtime(){
+  // Note: nécessite Supabase Realtime activé
+  supabase
+    .channel("hospitals_changes")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "hospitals" },
+      () => {
+        // Recharge silencieuse
+        fetchHospitals().catch(()=>{});
+      }
+    )
+    .subscribe((status) => {
+      // statuses possible: SUBSCRIBED, TIMED_OUT, CHANNEL_ERROR, CLOSED
+      if(status === "SUBSCRIBED"){
+        setStatus("• Connecté (live)", "ok");
+      }
+    });
 }
-function escapeAttr(str){ return escapeHtml(str).replaceAll("`","&#096;"); }
 
-/** =========================
- *  Init
- *  ========================= */
-fetchHospitals().catch(err => {
-  console.error(err);
-  tbody.innerHTML = `<tr><td colspan="11">Impossible de charger les données.</td></tr>`;
-});
+/****************************************************
+ * INIT
+ ****************************************************/
+(async function init(){
+  setStatus("• Connexion…", "warn");
+
+  // Petit check basique des clés
+  if(!SUPABASE_URL.includes("https://") || SUPABASE_ANON_KEY.length < 20){
+    setStatus("• Clés Supabase manquantes", "bad");
+    tbody.innerHTML = `<tr><td colspan="11">Configure SUPABASE_URL et SUPABASE_ANON_KEY dans app.js</td></tr>`;
+    return;
+  }
+
+  try{
+    await fetchHospitals();
+    startRealtime();
+  } catch(err){
+    console.error(err);
+    tbody.innerHTML = `<tr><td colspan="11">Impossible de charger la base. Vérifie Supabase + RLS/Policies.</td></tr>`;
+  }
+})();
